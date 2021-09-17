@@ -178,7 +178,7 @@ struct ChildView: View {
                     ProgressView()
                 }
             }
-            .onAppear { viewStore.send(.onAppear) }
+            //.onAppear { viewStore.send(.onAppear) }
             .navigationTitle("Child")
         }
     }
