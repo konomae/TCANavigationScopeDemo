@@ -44,7 +44,7 @@ let childReducer = Reducer<
         state.isLoading = true
         
         return Effect(value: ChildAction.response)
-            .delay(for: 2, scheduler: env.mainQueue)
+            //.delay(for: 2, scheduler: env.mainQueue)
             .eraseToEffect()
     case .response:
         state.isLoading = false
