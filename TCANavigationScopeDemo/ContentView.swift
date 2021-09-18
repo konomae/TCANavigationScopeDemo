@@ -4,21 +4,15 @@ import SwiftUI
 
 struct AppState: Equatable {
     var child: ChildState?
-    var childWithoutScope: ChildState?
     
     var isChildPresented: Bool {
         child != nil
-    }
-    
-    var isChildWithoutScopePresented: Bool {
-        childWithoutScope != nil
     }
 }
 
 enum AppAction: Equatable {
     case child(ChildAction)
     case childPresented(Bool)
-    case childWithoutScopePresented(Bool)
 }
 
 struct ChildState: Equatable {
@@ -67,11 +61,12 @@ let appReducer = Reducer<
         switch action {
         case .child:
             return .none
-        case let .childPresented(isPresented):
-            state.child = isPresented ? .init() : nil
+        case .childPresented(true):
+            state.child = .init()
             return .none
-        case let .childWithoutScopePresented(isPresented):
-            state.childWithoutScope = isPresented ? .init() : nil
+        case .childPresented(false):
+            state.child = nil
+            // TODO: tear down child effects
             return .none
         }
     }
@@ -79,89 +74,43 @@ let appReducer = Reducer<
 
 struct ContentView: View {
     var body: some View {
-        TabView {
-            AppView(
-                store: .init(
-                    initialState: .init(),
-                    reducer: appReducer,
-                    environment: .init()
-                )
+        AppView(
+            store: .init(
+                initialState: .init(),
+                reducer: appReducer,
+                environment: .init()
             )
-            .tabItem {
-                Text("Demo")
-            }
-            
-            Text("Escape")
-                .tabItem {
-                    Text("Escape")
-                }
-        }
+        )
     }
 }
 
 struct AppView: View {
     let store: Store<AppState, AppAction>
     
-    @State var isVanillaChildPresented = false
-    
     var body: some View {
         NavigationView {
-            WithViewStore(store) { viewStore in
-                VStack {
+            VStack {
+                WithViewStore(store.stateless) { viewStore in
                     Button("show child", action: { viewStore.send(.childPresented(true)) })
-                    
-                    Button("show child (without scope)", action: { viewStore.send(.childWithoutScopePresented(true)) })
-                    
-                    Button("show child (vanilla)", action: { isVanillaChildPresented = true })
-                    
+                }
+                
+                WithViewStore(store.scope(state: \.isChildPresented)) { viewStore in
                     NavigationLink(
                         isActive: viewStore.binding(
-                            get: \.isChildPresented,
+                            get: { $0 },
                             send: AppAction.childPresented
                         )
                     ) {
-                        IfLetStore(store.scope(state: \.child, action: AppAction.child)) { childStore in
-                            // strange behavior
-                            // navigation bar still hidden on ChildView🤔
-                            // (iOS 14)
-                            ChildView(store: childStore)
-                        }
-                    } label: {
-                        EmptyView()
-                    }
-                    
-                    NavigationLink(
-                        isActive: viewStore.binding(
-                            get: \.isChildWithoutScopePresented,
-                            send: AppAction.childWithoutScopePresented
+                        IfLetStore(
+                            store.scope(state: \.child, action: AppAction.child),
+                            then: ChildView.init(store:)
                         )
-                    ) {
-                        IfLetStore(store.scope(state: \.childWithoutScope, action: AppAction.child)) { childStore in
-                            // Using IfLetStore, Pass newly created store on purpose.
-                            // Works fine.
-                            ChildView(
-                                store: .init(
-                                    initialState: .init(),
-                                    reducer: childReducer,
-                                    environment: .init()
-                                )
-                            )
-                        }
-                    } label: {
-                        EmptyView()
-                    }
-                    
-                    NavigationLink(
-                        isActive: $isVanillaChildPresented
-                    ) {
-                        // Works fine.
-                        VanillaChildView()
                     } label: {
                         EmptyView()
                     }
                 }
-                .navigationBarHidden(true)
             }
+            .navigationBarHidden(true)
         }
     }
 }
@@ -183,35 +132,6 @@ struct ChildView: View {
         }
     }
 }
-
-class ChildViewModel: ObservableObject {
-    @Published private(set) var isLoading = false
-    
-    func onAppear() {
-        isLoading = true
-        
-        Just(false)
-            .delay(for: 2, scheduler: DispatchQueue.main)
-            .assign(to: &$isLoading)
-    }
-}
-
-struct VanillaChildView: View {
-    @StateObject var viewStore = ChildViewModel()
-    
-    var body: some View {
-        VStack {
-            Text("child")
-            
-            if viewStore.isLoading {
-                ProgressView()
-            }
-        }
-        .onAppear { viewStore.onAppear() }
-        .navigationTitle("Child")
-    }
-}
-
 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
